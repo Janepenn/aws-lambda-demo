@@ -1,0 +1,90 @@
+service: lambda-demo-api
+frameworkVersion: '2'
+# Load environment variables from .env files (default: false)
+# See https://www.serverless.com/framework/docs/environment-variables
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  lambdaHashingVersion: 20201221
+  region: ${env:REGION}
+  stage: ${env:STAGE}
+  environment:
+    DYNAMODB_TABLE: ${env:DYNAMODB_TABLE}
+    PRIVATE_KEY: ${file(./secret.json):secret}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+custom:
+  # profiles:
+  #   dev: dev
+  dotenv:
+    exclude:
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+  serverless-offline:
+    httpPort: 4000
+
+functions:
+  signup:
+    handler: handler/rest/user/signup.handler
+    events:
+      - http:
+          path: api/user/signup
+          method: post
+          cors: true
+  login:
+    handler: handler/rest/user/login.handler
+    events:
+      - http:
+          path: api/user/login
+          method: get
+          cors: true
+  public:
+    handler: handler/rest/public.handler
+    events:
+      - http:
+          path: api/public
+          method: get
+          cors: true
+  private: 
+    handler: handler/rest/private.handler
+    events:
+      - http:
+          path: api/private
+          method: get
+          authorizer: auth
+          cors: true
+  auth:
+    handler: handler/rest/auth.handler
+
+resources:
+  Resources:
+    UserTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: username
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: username
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}     
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-offline
